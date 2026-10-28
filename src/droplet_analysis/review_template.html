@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>液滴 / 液膜工具 0.1.0 · 算法 5.3.1 · px</title>
+<style>
+:root{color-scheme:light;font-family:system-ui,"Microsoft YaHei",sans-serif;color:#223440;background:#f4f6f8;font-size:14px}
+*{box-sizing:border-box}body{margin:0;padding:22px;max-width:1800px;margin:auto}h1{font-size:25px;margin:0 0 6px}p{line-height:1.65}a{color:#08738b}header{display:flex;gap:24px;align-items:center;justify-content:space-between;margin-bottom:16px}.muted{color:#58707d}.bar{background:white;border:1px solid #dbe3e9;border-radius:10px;padding:14px;margin-bottom:14px}.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}button,select,input,textarea{font:inherit}button{border:1px solid #bccdd7;background:#fff;color:#244052;border-radius:5px;padding:7px 12px;cursor:pointer}button:hover{background:#edf6f9}button.primary{background:#086e86;border-color:#086e86;color:#fff}button:disabled{opacity:.45;cursor:default}input[type=range]{flex:1;min-width:150px;accent-color:#08738b}input[type=number]{width:85px;padding:7px;border:1px solid #bccdd7;border-radius:5px}label{display:inline-flex;gap:6px;align-items:center}#status{margin-top:10px;line-height:1.8}.tag{background:#fff0d9;color:#80520b;border:1px solid #efd3a5;border-radius:4px;padding:2px 7px;display:inline-block;margin:2px 4px 2px 0}.tag.good{background:#e1f3e9;color:#286b49;border-color:#b5dcc6}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.panel{background:white;border:1px solid #dbe3e9;border-radius:8px;overflow:hidden}.panel h2{font-size:15px;padding:10px 14px;margin:0;border-bottom:1px solid #e3e9ed}.panel canvas{display:block;width:100%;height:auto;max-height:690px;object-fit:contain;background:white}.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;margin:14px 0}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}.neighbors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));max-width:940px;gap:12px;margin:12px auto}.neighbors canvas{width:100%;height:auto;max-height:250px;object-fit:contain}.neighbors .panel{cursor:pointer}.neighbors h2{font-size:13px}details{margin-top:14px}summary{cursor:pointer;font-weight:600;padding:8px 0}.editbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}textarea{display:block;width:100%;min-height:60px;border:1px solid #c9d5dd;border-radius:5px;padding:8px;margin:10px 0}#editHint{color:#856015;margin:8px 0}pre{overflow:auto;white-space:pre-wrap;font-size:12px}#error{color:#a42828}#frameLabel{font-size:18px;font-weight:650;min-width:100px}footer{font-size:12px;color:#627784;margin:18px 0}.notice{padding:10px;background:#fdf6e9;border-radius:5px}#polygonHint{display:none}.edited{color:#916000;font-weight:600}@media(max-width:800px){body{padding:10px}.grid{grid-template-columns:1fr}.panel canvas{max-height:650px}header{display:block}.neighbors{gap:5px}}
+body{padding:10px 14px;max-width:1920px;font-size:12px}header{gap:14px;margin-bottom:7px;min-height:32px}h1{font-size:18px;margin:0}p{line-height:1.45}.bar{padding:9px 11px;margin-bottom:8px;border-radius:8px}.controls{gap:6px}button{padding:4px 8px}input[type=number]{padding:4px;width:68px}#frameLabel{font-size:15px;min-width:70px}#navigationPanel .controls+ .controls{margin-top:5px!important}#status{margin-top:4px;line-height:1.4;max-height:38px;overflow:auto;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.tag{font-size:11px;padding:1px 4px;margin:0}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:9px;align-items:stretch}.image-area{min-width:0}.grid{gap:8px}.grid>.panel{height:clamp(250px,calc(100dvh - 354px),680px);display:flex;flex-direction:column;align-items:center}.panel h2{font-size:12px;padding:6px 8px;width:100%;flex-shrink:0}.grid>.panel canvas{width:auto;height:auto;max-width:100%;max-height:calc(100% - 30px);object-fit:contain;margin:auto;min-height:0}.legend{gap:9px;font-size:11px;margin:6px 0 0}.dot{width:8px;height:8px;margin-right:3px}#manualPanel{margin:0;height:clamp(280px,calc(100dvh - 324px),710px);overflow:auto}#manualPanel>summary{position:sticky;top:-9px;background:white;z-index:2;padding:3px 0 7px;font-size:14px}#manualPanel .editbar{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px}#manualPanel button{font-size:11px;line-height:1.3;padding:4px 5px}#manualPanel .editbar button{min-height:25px}#manualPanel textarea{height:34px;min-height:34px;margin:5px 0;padding:4px;font-size:12px}#editHint{font-size:11px;line-height:1.4;margin:4px 0}#manualPanel .controls{gap:4px}#manualPanel .manual-help{margin:0 0 5px;font-size:11px}#manualPanel .manual-help summary{padding:2px 0}#manualPanel #saved{display:block;font-size:11px;margin-top:4px}#manualPanel input[type=file]{width:210px;font-size:11px}#neighborDetails{margin-top:8px}#neighborDetails>summary{font-size:12px;padding:2px}.neighbors{margin:5px auto}.neighbors canvas{max-height:200px}.series-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.series-heading h2{font-size:13px;margin:0}.series-heading .controls{font-size:11px}.series-charts{display:grid;grid-template-columns:1fr 1fr;gap:12px}.series-charts canvas{display:block;width:100%;height:138px}#impactPointInfo{font-size:11px;margin:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}footer{margin:8px 0;font-size:11px}#detailsData{margin-top:8px}.secondary-help{font-size:11px}.layer-row{font-size:11px}.layer-row button{font-size:11px;padding:3px 6px}#impactBadge{color:#7c2bc2}#sequence{font-size:11px}
+@media(max-height:800px) and (min-width:1101px){.series-charts canvas{height:111px}.grid>.panel{height:clamp(230px,calc(100dvh - 323px),520px)}#manualPanel{height:clamp(260px,calc(100dvh - 293px),550px)}#status{max-height:28px}}
+@media(max-width:1100px){.workspace{grid-template-columns:1fr}#manualPanel{height:auto;max-height:none}.grid>.panel{height:410px}#manualPanel .editbar{grid-template-columns:repeat(4,1fr)}#manualPanel>summary{position:static}.series-charts canvas{height:145px}}
+@media(max-width:700px){body{padding:8px}.series-charts{grid-template-columns:1fr}.series-heading{display:block}.grid{grid-template-columns:1fr}.grid>.panel{height:440px}#manualPanel .editbar{grid-template-columns:1fr 1fr}#impactPointInfo{white-space:normal}header{display:block}.secondary-help{display:none}}
+@media(min-width:1101px){.grid>.panel{height:var(--image-stage,440px)}#manualPanel{height:var(--manual-stage,470px)}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><div><h1>液滴 / 液膜工具 0.1.0 · 算法 5.3.1 · px</h1><div id="sequence" class="muted"></div></div><label id="sequencePicker" hidden>切换数据集 <select id="sequenceSelect" aria-label="切换数据集"></select></label><a id="backLink" href="__BACK_LINK__">返回版本列表</a></header>
+<section class="bar" id="navigationPanel" aria-label="帧切换与显示操作">
+<div class="controls"><button id="prev">← 上一帧</button><button id="play">播放</button><button id="next">下一帧 →</button><span id="frameLabel"></span><input id="slider" type="range" min="0" value="0"><input id="jump" type="number" aria-label="跳转帧号"><button id="go">跳转</button><button id="impact">撞击候选</button><button id="flagNext">下一异常</button></div>
+<div class="controls" style="margin-top:12px"><label><input id="crop" type="checkbox" checked>放大液体区域</label><label><input id="numbers" type="checkbox" checked>显示像素测量值</label><button id="locateImpact">定位撞击点</button><span class="muted secondary-help">← → 切帧；空格播放。参考图像坐标。</span></div>
+<div class="controls layer-row" style="margin-top:12px" role="group" aria-label="标注图层"><strong>图层：</strong><label><input id="showContour" type="checkbox" checked>轮廓</label><label><input id="showWall" type="checkbox" checked>壁面</label><label><input id="showContact" type="checkbox" checked>接触线</label><label><input id="showEndpoints" type="checkbox" checked>端点</label><label><input id="showThickness" type="checkbox" checked>厚度线</label><label><input id="showImpact" type="checkbox" checked>撞击点</label><label><input id="uncertainty" type="checkbox" checked>不确定范围</label><button id="onlyContour">只看轮廓</button><button id="onlyContact">只看接触</button><button id="hideLayers">隐藏标注</button><button id="allLayers">全部标注</button></div>
+<div id="status"></div><div id="error"></div>
+</section>
+<div class="workspace" id="reviewWorkspace"><div class="image-area"><div class="grid">
+<div class="panel"><h2>图像（仅配准）</h2><canvas id="raw"></canvas></div>
+<div class="panel"><h2>完整液体轮廓</h2><canvas id="contour"></canvas></div>
+<div class="panel"><h2>接触范围与最大可见厚度</h2><canvas id="measure"></canvas></div>
+</div>
+<div class="legend"><span><i class="dot" style="background:#00a082"></i>轮廓</span><span><i class="dot" style="background:#be5abe"></i>壁面</span><span><i class="dot" style="background:#2473ef"></i>接触上端</span><span><i class="dot" style="background:#e9b600"></i>接触下端</span><span><i class="dot" style="background:#e42a2a"></i>最大厚度</span><span><i class="dot" style="background:#ed9a12"></i>不确定范围</span><span id="impactBadge">⊕ 撞击点：首帧固定参考</span></div></div>
+<details class="bar" id="manualPanel" open><summary>人工修正与复核记录</summary>
+<details class="manual-help"><summary>绘制说明与保存方式</summary><p>在中间或右侧图上绘制。接触段修改后长度立即更新；轮廓修改后厚度重算，人工厚度优先保留。通过工具打开时自动保存到结果目录；离线打开时请导出备份。</p></details>
+<div class="editbar"><button id="drawPolygon">替换液体轮廓</button><button id="addPolygon">追加液体区域</button><button id="finishPolygon">完成轮廓</button><button id="addContact">重新指定接触段（点两次）</button><button id="addThickness">重新指定最大厚度（点两次）</button><button id="resetThickness">撤销厚度修正</button><button id="clearThickness">标记无有效厚度</button><button id="clearContacts">清空正式接触段</button><button id="cancelEdit">取消绘制</button><button id="resetFrame">撤销本帧修改</button></div>
+<div id="editHint">接触段点击会吸附到参考壁面。厚度修正先点壁面、再点外缘，第二点投影到壁面法线。轮廓至少需要三个点。</div>
+<label><input id="reviewed" type="checkbox">本帧已人工复核</label> <button id="setImpact">将本帧标为撞击帧</button> <button id="resetImpact">取消撞击帧修正</button><textarea id="note" placeholder="记录边界不确定、真实断裂或其他观察"></textarea>
+<div class="controls"><button class="primary" id="exportData">完整追溯 JSON（含轮廓）</button><button id="exportCsv">正式数值 CSV</button><button id="exportTraceCsv">全帧追溯 CSV</button><button id="exportFolder">修正结果保存到文件夹</button><button id="export">导出当前组复核</button><button class="primary" id="exportAllReviews">导出全部组复核</button></div><label style="margin-top:5px">导入复核<input id="import" type="file" accept=".json,application/json"></label><span id="saved" class="muted"></span>
+</details>
+</div>
+<details class="bar" id="neighborDetails"><summary>展开前后帧对照</summary><div class="neighbors"><div class="panel" id="neighborPrev"><h2 id="prevTitle">前一帧</h2><canvas id="previousCanvas"></canvas></div><div class="panel"><h2 id="currentTitle">当前帧</h2><canvas id="currentCanvas"></canvas></div><div class="panel" id="neighborNext"><h2 id="nextTitle">后一帧</h2><canvas id="nextCanvas"></canvas></div></div></details>
+<details class="bar" id="detailsData"><summary>本帧数据与测量定义</summary><pre id="data"></pre></details>
+<footer>最大厚度沿壁面法线量到主液膜的外轮廓，完整前端与贴壁尾部，内部反光亮区不截断厚度线；厚度线经过悬出区不等于该处与壁面接触。蓝线为主液膜接触两端之间的壁面总弧长；中间证据不足的部分单独标记。最大厚度覆盖完整主液膜。正式数值 CSV 仅含有效撞击后帧；全帧追溯 CSV 和完整追溯 JSON 包含撞击前、终止后暂存几何及状态，不能直接作为正式统计。复核记录用于恢复编辑。人工厚度优先于自动厚度；可单独撤销或标记无有效厚度。可一次导出当前页面包含的全部数据集中已有复核记录的组，保存为 all.review.json，也可导入该合并文件。最终数据 JSON 和 CSV 仍按当前组选取。</footer>
+<script id="manifest" type="application/json">__MANIFEST__</script>
+<script>
+__GEOMETRY__
+</script>
+<script>
+'use strict';
+const payload=JSON.parse(document.getElementById('manifest').textContent);
+const datasets=payload.sequences||[payload];
+const requestedSequence=new URLSearchParams(location.search).get('sequence');
+const manifest=datasets.find(item=>item.sequence===requestedSequence)||datasets[0];
+if(datasets.length>1){
+  $('sequencePicker').hidden=false;
+  for(const item of datasets){const option=document.createElement('option');option.value=item.sequence;option.textContent=item.sequence;option.selected=item===manifest;$('sequenceSelect').append(option)}
+  $('sequenceSelect').onchange=()=>{const url=new URL(location.href);url.searchParams.set('sequence',$('sequenceSelect').value);location.assign(url.href)};
+}
+const frames=manifest.frames,wall=manifest.wall.points,wallS=manifest.wall.s_px;
+function $(id){return document.getElementById(id)}
+const labels={thickness_outer_envelope:'厚度量到外轮廓，跨越亮腔或悬出区',contact_evidence_weak:'近壁候选证据不足，未确认为接触',contact_boundary_uncertain:'接触边界不确定',highlight_boundary_reconstructed:'局部亮腔边界补全，需复核',temporal_highlight_repair:'前后帧支持的亮区补全',registration_uncertain:'配准需复核',liquid_at_roi_boundary:'液体接近画面或处理边界',normal_search_truncated:'厚度搜索范围不足',thickness_contact_uncertain:'最大厚度处接触需复核',missing_previous_frame:'存在缺帧',area_jump:'面积突变',contact_endpoint_jump:'接触端点跳变',thickness_jump:'厚度突变'};
+let index=0,timer=null,epoch=0,mode=null,polygon=[],contactPoints=[],appendPolygon=false;
+let lastRoi=null,edits={},impactOverride=null;
+const storageKey='droplet-review-v5:'+manifest.sequence+':'+manifest.analysis_signature;
+try{const saved=JSON.parse(localStorage.getItem(storageKey)||'{}');edits=saved.frames||{};impactOverride=saved.impact_frame??null}catch(e){edits={}}
+const cache=new Map();
+function imageFor(i){if(i<0||i>=frames.length)return Promise.resolve(null);const url=frames[i].image;if(!cache.has(url)){cache.set(url,new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error('无法打开图像：'+url));image.src=url}));if(cache.size>40)cache.delete(cache.keys().next().value)}return cache.get(url)}
+function save(){try{localStorage.setItem(storageKey,JSON.stringify({frames:edits,impact_frame:impactOverride}));$('saved').textContent='已保存 '+Object.keys(edits).length+' 帧的复核记录'+(impactOverride!==null?'；撞击帧修正为 '+impactOverride:'')}catch(e){$('saved').textContent='浏览器未允许本地保存，请导出复核文件'}}
+function edit(){const key=String(frames[index].frame);if(!edits[key])edits[key]={};return edits[key]}
+function wallAt(s){let k=0;while(k<wallS.length-2&&wallS[k+1]<s)k++;const t=Math.max(0,Math.min(1,(s-wallS[k])/(wallS[k+1]-wallS[k])));return [wall[k][0]*(1-t)+wall[k+1][0]*t,wall[k][1]*(1-t)+wall[k+1][1]*t]}
+const effectiveCache=new Map();
+function effective(i){const f=frames[i],e=edits[String(f.frame)],key=JSON.stringify(e||null),old=effectiveCache.get(f.frame);if(old&&old.key===key)return old.value;const value=DropletGeometry.effective(f,e,manifest);effectiveCache.set(f.frame,{key,value});return value}
+function roiFor(i){const [w,h]=manifest.image_size;if(!$('crop').checked)return [0,0,w,h];const points=[];for(let j=Math.max(0,i-1);j<=Math.min(frames.length-1,i+1);j++){const r=effective(j);for(const c of r.contours)points.push(...c);for(const s of [...r.contact_segments,...(r.uncertain_contact_segments||[])])points.push(wallAt(s.s_start_px),wallAt(s.s_end_px))}if(!points.length)return [0,0,w,h];const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);return [Math.max(0,Math.min(...xs)-25),Math.max(0,Math.min(...ys)-25),Math.min(w,Math.max(...xs)+55),Math.min(h,Math.max(...ys)+25)]}
+function path(ctx,points,color,width=1,closed=false,dashed=false){if(!points.length)return;ctx.beginPath();ctx.moveTo(...points[0]);for(const p of points.slice(1))ctx.lineTo(...p);if(closed)ctx.closePath();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dashed?[3,3]:[]);ctx.stroke();ctx.setLineDash([])}
+function circle(ctx,p,color){ctx.fillStyle=color;ctx.beginPath();ctx.arc(...p,2.7,0,Math.PI*2);ctx.fill()}
+const layerIds=['showContour','showWall','showContact','showEndpoints','showThickness','showImpact','uncertainty'];
+const layerStorageKey='droplet-review-layers-v5';
+try{const saved=JSON.parse(localStorage.getItem(layerStorageKey)||'{}');for(const id of layerIds)if(typeof saved[id]==='boolean')$(id).checked=saved[id]}catch(e){}
+function saveLayers(){try{localStorage.setItem(layerStorageKey,JSON.stringify(Object.fromEntries(layerIds.map(id=>[id,$(id).checked]))))}catch(e){}}
+function setLayers(enabled){for(const id of layerIds)$(id).checked=enabled.includes(id);saveLayers();render()}
+function currentImpactPoint(){const number=impactOverride??manifest.impact.first_contact_frame;const i=frames.findIndex(f=>f.frame===number);return DropletGeometry.impactPoint(manifest,i<0?[]:[effective(i)],number)}
+function drawImpactMarker(canvas,roi){
+  const origin=currentImpactPoint();if(origin.status!=='defined')return;
+  const [x,y]=origin.point_px,[x0,y0,x1,y1]=roi,m=canvas._mapping,ctx=canvas.getContext('2d');
+  ctx.save();
+  if(x<x0||x>x1||y<y0||y>y1){
+    canvas._impactMarker={visible:false,point:origin.point_px,frame:origin.frame};
+  }else{
+    const px=(x-x0)*m.scale+m.ox,py=(y-y0)*m.scale+m.oy;
+    ctx.beginPath();ctx.arc(px,py,5,0,2*Math.PI);ctx.fillStyle='#7c2bc2';ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=1.5;ctx.stroke();
+    canvas._impactMarker={visible:true,style:'dot',point:origin.point_px,pixel:[px,py],frame:origin.frame};
+  }ctx.restore();
+}
+function draw(canvas,img,result,roi,kind,small=false){
+  const [x0,y0,x1,y1]=roi,w=x1-x0,h=y1-y0;
+  canvas.width=small?360:650;canvas.height=Math.round(Math.min(small?330:900,canvas.width*h/w));
+  const scale=Math.min(canvas.width/w,canvas.height/h),ox=(canvas.width-w*scale)/2,oy=(canvas.height-h*scale)/2;
+  canvas._mapping={scale,ox,oy,x0,y0};
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.save();ctx.translate(ox,oy);ctx.scale(scale,scale);ctx.translate(-x0,-y0);ctx.imageSmoothingEnabled=false;ctx.drawImage(img,0,0);
+  if(kind){
+    if($('showWall').checked)path(ctx,wall,'#be5abe',.8);
+    if($('showContour').checked)for(const c of result.contours)path(ctx,c,'#00a082',.9,true);
+  }
+  if(kind===2){
+    for(const seg of result.contact_segments){
+      if($('showContact').checked){
+        const points=wall.filter((p,k)=>wallS[k]>=seg.s_start_px&&wallS[k]<=seg.s_end_px);
+        path(ctx,[seg.start,...points,seg.end],'#1695da',1.5);
+      }
+
+      if($('showEndpoints').checked){circle(ctx,seg.start,'#2473ef');circle(ctx,seg.end,'#e9b600')}
+    }
+    if($('uncertainty').checked)for(const seg of result.uncertain_contact_segments||[]){const points=wall.filter((p,k)=>wallS[k]>=seg.s_start_px&&wallS[k]<=seg.s_end_px);path(ctx,[wallAt(seg.s_start_px),...points,wallAt(seg.s_end_px)],'#ed9a12',1.8,false,true)}
+    const m=result.maximum_visible_thickness;if(m&&$('showThickness').checked)path(ctx,[m.start,m.end],'#e42a2a',1.5);
+  }
+  if(!small&&kind&&polygon.length&&$('showContour').checked){path(ctx,polygon,'#b42ac5',1,false,true);for(const p of polygon)circle(ctx,p,'#b42ac5')}
+  if(!small&&kind&&contactPoints.length&&$('showEndpoints').checked)circle(ctx,wallAt(contactPoints[0]),'#b42ac5');
+  ctx.restore();
+  canvas._impactMarker=null;if(kind&&$('showImpact').checked)drawImpactMarker(canvas,roi);
+}
+async function render(){const token=++epoch;const frame=frames[index],r=effective(index),e=edits[String(frame.frame)]||{};$('frameLabel').textContent='帧 '+frame.frame;$('slider').value=index;$('jump').value=frame.frame;$('prev').disabled=index===0;$('next').disabled=index===frames.length-1;$('reviewed').checked=!!e.reviewed;$('note').value=e.note||'';$('status').replaceChildren();const status=$('status');if(frame.impact_candidate){const tag=document.createElement('span');tag.className='tag';tag.textContent='首次可见接触候选，已由后续帧确认；仍需核对原图';status.append(tag)}for(const flag of r.flags){const tag=document.createElement('span');tag.className='tag';tag.textContent=labels[flag]||flag;status.append(tag)}if(!r.flags.length){const span=document.createElement('span');span.className='muted';span.textContent='未触发自动异常规则，尚不代表识别正确。';status.append(span)}if(e.reviewed){const tag=document.createElement('span');tag.className='tag good';tag.textContent='已人工复核';status.append(tag)}if(r.manual_correction_applied){const s=document.createElement('span');s.className='edited';s.textContent=' 已应用人工修正；显示与导出均使用当前结果。';status.append(s)}if($('numbers').checked){const s=document.createElement('div');const v=r.maximum_visible_thickness;s.textContent='接触弧长 '+r.contact_length_px.toFixed(1)+' px；最大可见厚度 '+(v?v.value_px.toFixed(1)+' px':'无有效测量');status.append(s)}$('data').textContent=JSON.stringify({frame:frame.frame,definitions:manifest.definitions,automatic:frame,current:r,review:e},null,2);try{const [prev,img,next]=await Promise.all([imageFor(index-1),imageFor(index),imageFor(index+1)]);if(token!==epoch)return;const roi=roiFor(index);lastRoi=roi;draw($('raw'),img,r,roi,0);draw($('contour'),img,r,roi,1);draw($('measure'),img,r,roi,2);draw($('currentCanvas'),img,r,roi,2,true);$('currentTitle').textContent='当前帧 '+frame.frame;for(const [image,i,canvas,title,label]of[[prev,index-1,'previousCanvas','prevTitle','前一帧'],[next,index+1,'nextCanvas','nextTitle','后一帧']]){if(image){draw($(canvas),image,effective(i),roi,2,true);$(title).textContent=label+' '+frames[i].frame}else{$(canvas).getContext('2d').clearRect(0,0,$(canvas).width,$(canvas).height);$(title).textContent=label+'（无）'}}$('error').textContent=''}catch(error){$('error').textContent=error.message}}
+function go(i){index=Math.max(0,Math.min(frames.length-1,i));mode=null;polygon=[];contactPoints=[];render()}
+function stop(){clearInterval(timer);timer=null;$('play').textContent='播放'}
+function play(){if(timer){stop();return}timer=setInterval(()=>{if(index>=frames.length-1){stop();return}go(index+1)},180);$('play').textContent='暂停'}
+function canvasPoint(event,canvas){const box=canvas.getBoundingClientRect(),m=canvas._mapping;return [(event.clientX-box.left)*canvas.width/box.width/m.scale-m.ox/m.scale+m.x0,(event.clientY-box.top)*canvas.height/box.height/m.scale-m.oy/m.scale+m.y0]}
+function nearestWall(p){let best=wallS[0],distance=Infinity;for(let k=0;k<wall.length-1;k++){const a=wall[k],b=wall[k+1],dx=b[0]-a[0],dy=b[1]-a[1],t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/(dx*dx+dy*dy))),d=(p[0]-a[0]-t*dx)**2+(p[1]-a[1]-t*dy)**2;if(d<distance){distance=d;best=wallS[k]+t*(wallS[k+1]-wallS[k])}}return best}
+function onCanvas(event){if(!mode)return;stop();const p=canvasPoint(event,event.currentTarget);if(p.some((v,k)=>v<0||v>=manifest.image_size[k]))return;if(mode==='polygon'){polygon.push(p.map(v=>Math.round(v*10)/10));render()}else if(mode==='contact'){contactPoints.push(nearestWall(p));if(contactPoints.length===2){const bounds=contactPoints.sort((a,b)=>a-b);if(bounds[1]-bounds[0]>=1){const e=edit();e.contact_intervals=[bounds];e.reviewed=false;save()}contactPoints=[];mode=null}render()}}
+function finishPolygon(){if(mode!=='polygon'||polygon.length<3){$('editHint').textContent='轮廓至少需要三个点。';return}const e=edit();const old=appendPolygon?(e.contours||frames[index].contours):[];e.contours=[...old,polygon];e.reviewed=false;polygon=[];mode=null;save();render()}
+$('sequence').textContent=manifest.sequence+' · '+frames.length+' 帧 · 无毫米标定';$('slider').max=frames.length-1;
+$('prev').onclick=()=>go(index-1);$('next').onclick=()=>go(index+1);$('play').onclick=play;$('slider').oninput=()=>go(Number($('slider').value));$('go').onclick=()=>{const n=Number($('jump').value),i=frames.findIndex(f=>f.frame===n);if(i>=0)go(i);else $('error').textContent='该帧号不存在。'};$('jump').onkeydown=e=>{if(e.key==='Enter')$('go').click()};
+$('impact').onclick=()=>{const i=frames.findIndex(f=>f.impact_candidate);if(i>=0)go(i)};$('impact').disabled=manifest.impact.first_contact_frame===null;
+$('locateImpact').onclick=()=>{const origin=currentImpactPoint(),i=frames.findIndex(f=>f.frame===origin.frame);if(i>=0){$('showImpact').checked=true;saveLayers();go(i)}};
+$('flagNext').onclick=()=>{for(let step=1;step<=frames.length;step++){const j=(index+step)%frames.length;if(frames[j].flags.some(f=>!['contact_boundary_uncertain'].includes(f))){go(j);break}}};
+for(const id of ['crop','numbers'])$(id).onchange=render;
+for(const id of layerIds)$(id).onchange=()=>{saveLayers();render()};
+$('onlyContour').onclick=()=>setLayers(['showContour']);
+$('onlyContact').onclick=()=>setLayers(['showContact','showEndpoints']);
+$('hideLayers').onclick=()=>setLayers([]);
+$('allLayers').onclick=()=>setLayers(layerIds);
+$('neighborPrev').onclick=()=>go(index-1);$('neighborNext').onclick=()=>go(index+1);
+for(const id of ['contour','measure'])$(id).addEventListener('click',onCanvas);
+function beginPolygon(append){$('showContour').checked=true;saveLayers();stop();mode='polygon';polygon=[];contactPoints=[];appendPolygon=append;$('editHint').textContent='沿液体外边缘依次点击，再点“完成轮廓”。Esc 取消。';render()}
+$('drawPolygon').onclick=()=>beginPolygon(false);$('addPolygon').onclick=()=>beginPolygon(true);$('finishPolygon').onclick=finishPolygon;
+$('addContact').onclick=()=>{$('showContact').checked=true;$('showEndpoints').checked=true;saveLayers();stop();mode='contact';polygon=[];contactPoints=[];$('editHint').textContent='点击两个端点，吸附到参考壁面后直接替换正式接触段；允许选在算法判为干区的位置。两点之间的壁面总弧长计入正式铺展长度。'};
+$('clearContacts').onclick=()=>{edit().contact_intervals=[];edit().reviewed=false;save();render()};$('cancelEdit').onclick=()=>{mode=null;polygon=[];contactPoints=[];render()};$('resetFrame').onclick=()=>{delete edits[String(frames[index].frame)];save();render()};
+$('reviewed').onchange=()=>{edit().reviewed=$('reviewed').checked;save();render()};$('note').onchange=()=>{edit().note=$('note').value;save()};
+$('setImpact').onclick=()=>{impactOverride=frames[index].frame;save();render()};$('resetImpact').onclick=()=>{impactOverride=null;save();render()};
+function download(name,content,type){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function finalData(){return DropletGeometry.finalManifest(manifest,edits,impactOverride)}
+$('exportData').onclick=()=>{try{download(manifest.sequence+'.all_frames_trace.json',JSON.stringify(finalData(),null,2),'application/json')}catch(e){$('error').textContent=e.message}};
+$('exportCsv').onclick=()=>{try{download(manifest.sequence+'.measurements.csv',DropletGeometry.csv(finalData()),'text/csv;charset=utf-8')}catch(e){$('error').textContent=e.message}};
+$('exportTraceCsv').onclick=()=>{try{download(manifest.sequence+'.all_frames_trace.csv',DropletGeometry.csv(finalData(),{trace:true}),'text/csv;charset=utf-8')}catch(e){$('error').textContent=e.message}};
+$('export').onclick=()=>{const value={schema_version:5,sequence:manifest.sequence,analysis_signature:manifest.analysis_signature,coordinate_system:'aligned_reference_px',frames:edits,impact_frame:impactOverride};download(manifest.sequence+'.review.json',JSON.stringify(value,null,2),'application/json')};
+$('import').onchange=async()=>{try{const file=$('import').files[0];if(!file)return;const value=JSON.parse(await file.text());if(value.sequence!==manifest.sequence||value.coordinate_system!=='aligned_reference_px'||!value.frames||(value.analysis_signature&&value.analysis_signature!==manifest.analysis_signature))throw new Error('复核文件与当前序列、分析参数或坐标系不一致。');const merged={...edits,...value.frames};DropletGeometry.finalManifest(manifest,merged,value.impact_frame??impactOverride);edits=merged;impactOverride=value.impact_frame??impactOverride;save();render()}catch(e){$('error').textContent=e.message}};
+document.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;if(e.key==='ArrowLeft'){e.preventDefault();go(index-1)}if(e.key==='ArrowRight'){e.preventDefault();go(index+1)}if(e.code==='Space'){e.preventDefault();play()}if(e.key==='Escape')$('cancelEdit').click();if(e.key==='Backspace'&&mode==='polygon'){e.preventDefault();polygon.pop();render()}});
+if(manifest.impact.first_contact_frame!==null)index=Math.max(0,frames.findIndex(f=>f.impact_candidate));
+save();render();
+</script>
+<script>
+__THICKNESS_UI__
+</script>
+<script>
+__BATCH_REVIEW_UI__
+</script>
+<script>
+__SERIES_UI__
+</script>
+<script>__TOOL_CONTEXT__</script><script>__PERSISTENCE_UI__</script></body>
+</html>

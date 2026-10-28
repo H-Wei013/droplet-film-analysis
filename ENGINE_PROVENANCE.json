@@ -1,0 +1,16 @@
+{
+  "algorithm_version": "5.3.1",
+  "baseline_source_sha256": "ba05ff93626cd34039d1b0c84b5e069302b4b18722016276e7885ad7a8cee721",
+  "unchanged_numerical_modules_sha256": {
+    "__init__.py": "f15d379d600d482f4e1e13b3a92f8161288da16ba84f3aa15058802cce472748",
+    "core.py": "f784b478bb25302447021c33983243afbdf4bad880e4d69f43aad7dd687cf826",
+    "v5.py": "5408bd868afbbfbe16758ac42ef9e4b7a26fd3218aa1e87b5c7c9d8d4cd8e1f6",
+    "optical.py": "ce15c8514bb2b5a9f58be22eee5fefb799c757158cf2c264b62ffcb03f00cb1c",
+    "temporal.py": "74af37175eb7d11b3fd02135ab5fe50da089c32cd668a41223da752744a9beb0",
+    "silhouette.py": "31b7efc3ff02019f6afc0c81af3b7c263a94634d7e75a96134ac20ace1bfd28e",
+    "render.py": "19819b41ec4b47db7076faf1ef06dde64087979d43926988058475d60b35dcf6",
+    "impact.py": "123eb9048b8cbf52a79323aaacf2dc331bcead0abd2638ddeae9fec97903d5d2"
+  },
+  "tool_version": "0.1.0",
+  "validation_status": "Tool checks only; no new experimental data tested."
+}

@@ -1,0 +1,7 @@
+# Versions of the local environment used for the tool snapshot checks.
+# This is a reference lock, not a guarantee of identical results on other environments.
+numpy==2.5.3
+scipy==1.18.1
+opencv-python==4.14.0.94
+matplotlib==3.11.2
+PyYAML==6.0.3

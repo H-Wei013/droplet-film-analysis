@@ -1,0 +1,13 @@
+{
+  "defaults": {
+    "reference_frames": 32,
+    "contact_seed_fraction": 0.48,
+    "highlight_gap_radius": 20,
+    "temporal_anchor_radius": 12,
+    "temporal_boundary_tolerance_px": 2.0,
+    "temporal_evidence_distance_px": 24.0,
+    "wall_uncertainty_px": 2.0,
+    "register": true
+  },
+  "sequences": {}
+}
