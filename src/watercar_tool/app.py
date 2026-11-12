@@ -29,18 +29,25 @@ def check_environment():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="BMP droplet/film tool; numerical engine 5.3.1; pixel units only")
+    parser = argparse.ArgumentParser(description="BMP droplet/film tool; numerical engine 5.3.2; pixel units only")
     parser.add_argument("--check", action="store_true", help="Check imports/environment without opening a window or loading images")
     parser.add_argument("--input", type=Path, help="Headless batch input folder")
     parser.add_argument("--resume", type=Path, help="Resume a previous run folder")
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--settings", type=Path, help="JSON settings overrides for a new task (ROI, wall search or wall points)")
     args = parser.parse_args()
+    if args.settings and args.resume:
+        parser.error('继续旧任务时不能更改参数；请使用新任务。')
     if args.check:
         import json
         print(json.dumps(check_environment(), ensure_ascii=False, indent=2)); return
     from .jobs import create_run, run
     config_path = Path(__file__).resolve().parents[1] / "droplet_analysis" / "config.json"
     settings = load_json(config_path)["defaults"]
+    if args.settings:
+        from droplet_analysis.core import Settings
+        settings.update(load_json(args.settings))
+        Settings.from_dict(settings)
     if args.input or args.resume:
         folder = args.resume or create_run(args.input, ROOT / "runs", settings, args.workers)
         print(str(folder), flush=True); run(folder); return
@@ -52,17 +59,17 @@ def gui(settings):
     from tkinter import ttk, filedialog, messagebox
     from .jobs import create_run
     window = tk.Tk()
-    window.title("液滴 / 液膜识别工具 0.1.0 · 算法 5.3.1 · px")
+    window.title("液滴 / 液膜识别工具 0.2.0 · 算法 5.3.2 · px")
     window.geometry("850x560"); window.minsize(700, 460)
     outer = ttk.Frame(window, padding=16); outer.pack(fill="both", expand=True)
     ttk.Label(outer, text="液滴 / 液膜识别工具", font=("Microsoft YaHei", 18)).pack(anchor="w")
-    ttk.Label(outer, text="工具 0.1.0 · 识别算法 5.3.1 · 仅像素单位 · 尚待新数据测试").pack(anchor="w", pady=(3, 12))
+    ttk.Label(outer, text="工具 0.2.0 · 识别算法 5.3.2 · 仅像素单位 · 新拍摄条件需复核").pack(anchor="w", pady=(3, 12))
     ttk.Label(outer, text="选择单组 BMP 文件夹，或包含多组序列的上级目录：").pack(anchor="w")
     row = ttk.Frame(outer); row.pack(fill="x", pady=6)
     path = tk.StringVar(); ttk.Entry(row, textvariable=path).pack(side="left", fill="x", expand=True)
     ttk.Button(row, text="选择文件夹", command=lambda: choose_input()).pack(side="left", padx=(6, 0))
     bar = ttk.Frame(outer); bar.pack(fill="x", pady=8)
-    status = tk.StringVar(value="请提供图像路径。前 32 帧用于参考背景；壁面需位于右侧。")
+    status = tk.StringVar(value=f"请提供图像路径。前 {settings.get('reference_frames', 32)} 帧用于参考背景；壁面需位于右侧。")
     ttk.Label(outer, textvariable=status, wraplength=800).pack(anchor="w", pady=(3, 8))
     log = tk.Text(outer, height=15, wrap="word", state="disabled"); log.pack(fill="both", expand=True)
     service = ReviewService(); messages = queue.Queue()
@@ -74,6 +81,52 @@ def gui(settings):
     def choose_input():
         selected = filedialog.askdirectory(title="选择 BMP 图像目录")
         if selected: path.set(selected)
+
+    def choose_settings():
+        if is_running(): return
+        selected = filedialog.askopenfilename(title="选择识别参数 JSON（仅用于新任务）", filetypes=[("JSON", "*.json")])
+        if not selected: return
+        try:
+            from droplet_analysis.core import Settings
+            candidate = load_json(Path(__file__).resolve().parents[1] / 'droplet_analysis' / 'config.json')['defaults']
+            candidate.update(load_json(selected)); Settings.from_dict(candidate)
+            settings.clear(); settings.update(candidate)
+            status.set('已加载参数；请先预览壁面。手动壁面点只适用于相同画面位置的图像。')
+            append('参数文件：'+selected)
+        except Exception as error: messagebox.showerror('参数无效', str(error))
+
+    def preview_wall():
+        if is_running(): return
+        requested = Path(path.get().strip().strip('"'))
+        if not path.get().strip() or not requested.is_dir():
+            messagebox.showinfo('壁面预览', '请先选择图像文件夹。'); return
+        current['preparing'] = True; status.set('正在读取参考帧并预览第一组壁面…')
+        selected_settings = dict(settings)
+        def prepare_preview():
+            try:
+                import cv2
+                from droplet_analysis.core import Settings, load_sequence, read_gray, Analyzer
+                from droplet_analysis.render import overlay
+                first = next((p for p in requested.rglob('*') if p.is_file() and p.suffix.lower()=='.bmp'), None)
+                if first is None: raise ValueError('没有找到 BMP 图像。')
+                files, _, _ = load_sequence(first.parent)
+                cfg = Settings.from_dict(selected_settings)
+                if len(files) < cfg.reference_frames: raise ValueError('参考帧不足。')
+                analyzer = Analyzer([read_gray(p) for p in files[:cfg.reference_frames]], cfg)
+                image = overlay(analyzer.background.astype('uint8'), analyzer.wall, dict(contours=[], contact_segments=[]), False)
+                x0,y0,x1,y1 = analyzer.roi
+                cv2.rectangle(image, (x0,y0), (x1-1,y1-1), (20,160,30), 1)
+                h,w = image.shape[:2]; scale=min(1., 1050/w, 650/h)
+                image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+                ok, encoded = cv2.imencode('.png', image)
+                if not ok: raise ValueError('无法生成预览。')
+                bottom=float(analyzer.wall.points[-1,1]); near=bottom>=analyzer.roi[3]-4
+                info=(str(first.parent)+'\n粉色：参考壁面；绿色：处理区域。壁面下端 y='+format(bottom,'.1f')+
+                      ' px；图像高度 '+str(h)+' px。\n'+('壁面已接近处理区域底部；仍需核对是否贴合可见边缘。' if near else
+                      '壁面尚未接近处理区域底部：请核对边缘，必要时加载 wall_search_roi 或 wall_points 参数。'))
+                messages.put(('preview_ready', (encoded.tobytes(), info)))
+            except Exception as error: messages.put(('error', str(error)))
+        threading.Thread(target=prepare_preview, daemon=True).start()
 
     def is_running():
         return current["preparing"] or (current["process"] is not None and current["process"].poll() is None)
@@ -136,7 +189,7 @@ def gui(settings):
         if os.name == "nt": os.startfile(folder)
         else: webbrowser.open(folder.as_uri())
 
-    for title, command in [("开始识别", start), ("停止", stop), ("继续任务", resume), ("打开本次结果", open_result), ("打开历史结果", open_history), ("结果目录", open_folder)]:
+    for title, command in [("壁面预览", preview_wall), ("参数文件", choose_settings), ("开始识别", start), ("停止", stop), ("继续任务", resume), ("打开本次结果", open_result), ("打开历史结果", open_history), ("结果目录", open_folder)]:
         ttk.Button(bar, text=title, command=command).pack(side="left", padx=(0, 5))
 
     def closing():
@@ -154,6 +207,16 @@ def gui(settings):
                     if not current["closing"]: spawn(value)
                 elif kind == "error":
                     current["preparing"] = False; status.set("输入检查失败："+value); append(value)
+                elif kind == 'preview_ready':
+                    import base64
+                    current['preparing'] = False
+                    if not current['closing']:
+                        dialog=tk.Toplevel(window); dialog.title('参考壁面与处理区域预览')
+                        photo=tk.PhotoImage(data=base64.b64encode(value[0]).decode('ascii'))
+                        label=ttk.Label(dialog, image=photo); label.image=photo; label.pack()
+                        ttk.Label(dialog, text=value[1], wraplength=1030, padding=10).pack(fill='x')
+                        ttk.Button(dialog, text='关闭预览', command=dialog.destroy).pack(pady=(0,10))
+                        status.set('壁面预览完成；请核对参考边缘和处理范围。')
                 elif kind == "finished":
                     current["process"] = None
                     state = load_json(current["folder"] / "run.json")

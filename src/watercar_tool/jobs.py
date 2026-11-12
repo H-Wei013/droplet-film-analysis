@@ -17,6 +17,7 @@ from .review import write_combined_review
 from . import ALGORITHM_VERSION, TOOL_VERSION
 from .io import atomic_json, load_json
 from .provenance import digest
+from .datasets import source_info, readable_name, entry_folder, dataset_key
 
 
 def preflight(input_path, settings=None):
@@ -53,14 +54,17 @@ def preflight(input_path, settings=None):
                     raise ValueError("video_param.json 中的帧率无效。")
             fingerprint = hashlib.sha256(json.dumps(dict(files=records, metadata=hashlib.sha256(metadata.read_bytes()).hexdigest() if metadata.exists() else None), sort_keys=True).encode()).hexdigest()
             ident = hashlib.sha256(str(directory).encode()).hexdigest()[:12]
-            entries.append(dict(id=ident, label=label, directory=str(directory), frames=len(files), image_size=image_size,
+            info=source_info(directory,root)
+            entries.append(dict(id=ident, label=label, display_label=info['display_label'],source_info=info,
+                                output_directory=readable_name(info['display_label'])+'__'+ident,
+                                directory=str(directory), frames=len(files), image_size=image_size,
                                 input_sha256=fingerprint, first_frame=numbers[0], last_frame=numbers[-1],
                                 has_frame_gaps=any(b != a+1 for a, b in zip(numbers, numbers[1:]))))
         except (ValueError, OSError, json.JSONDecodeError) as error:
             errors.append(dict(sequence=label, reason=str(error)))
     if not entries:
         raise ValueError("没有可处理的序列：\n" + "\n".join(e["sequence"] + ": " + e["reason"] for e in errors))
-    return dict(input=str(root), sequences=entries, rejected=errors)
+    return dict(input=str(root), sequences=sorted(entries,key=dataset_key), rejected=errors)
 
 
 def create_run(input_path, runs_root, settings, workers=4):
@@ -68,7 +72,8 @@ def create_run(input_path, runs_root, settings, workers=4):
     if runs_root == input_path or runs_root.is_relative_to(input_path) or input_path.is_relative_to(runs_root):
         raise ValueError("图像目录与工具的 runs 输出目录不能重叠。请选择独立的原始图像目录。")
     scanned = preflight(input_path, settings)
-    folder = runs_root / (datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid4().hex[:6])
+    description=scanned['sequences'][0]['display_label'] if len(scanned['sequences'])==1 else input_path.name
+    folder = runs_root / (datetime.now().strftime("%Y%m%d_%H%M%S") + '__'+readable_name(description,36)+'__' + uuid4().hex[:6])
     folder.mkdir(parents=True)
     sha, files = digest()
     state = dict(tool_version=TOOL_VERSION, algorithm_version=ALGORITHM_VERSION, algorithm_sha256=sha,
@@ -81,20 +86,37 @@ def create_run(input_path, runs_root, settings, workers=4):
 
 def publish_index(folder, state):
     cards = []
-    for entry in state["sequences"]:
-        ident, label = entry["id"], html.escape(entry["label"])
+    rows=[]
+    for entry in sorted(state["sequences"],key=dataset_key):
+        info=entry.get('source_info') or source_info(entry['directory'],state.get('input'))
+        ident, label = entry["id"], html.escape(info['display_label'])
+        output=entry_folder(entry)
+        rows.append(dict(condition=info['display_label'],output_directory=output,source_directory=entry['directory'],dataset_id=ident,
+                         status='complete' if ident in state['completed'] else state['failed'].get(ident,'pending')))
         if ident in state["completed"]:
-            cards.append(f'<li><a href="{ident}/review.html">{label} · 逐帧复核</a> · <a href="{ident}/measurements.csv">自动正式 CSV</a></li>')
+            cards.append(f'<li><a href="{html.escape(output)}/review.html">{label} · 逐帧复核</a> · <a href="{html.escape(output)}/measurements.csv">自动正式 CSV</a><br><small>来源：{html.escape(entry["directory"])}</small></li>')
         else:
             cards.append(f'<li>{label} · {html.escape(state["failed"].get(ident, "尚未完成"))}</li>')
-    page = '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>液膜分析任务</title><style>body{font:16px/1.8 system-ui;max-width:1100px;margin:35px auto;padding:20px}a{color:#08738b}</style><h1>液膜分析工具 0.1.0 · 识别算法 5.3.1</h1><p>仅像素单位；新数据识别效果需人工核对。自动数值保持原样，人工修正保存在 reviews，修正后导出保存在 exports。</p>'
+    page = '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>液膜分析任务</title><style>body{font:16px/1.8 system-ui;max-width:1100px;margin:35px auto;padding:20px}a{color:#08738b}</style><h1>液膜分析工具 0.2.0 · 识别算法 5.3.2</h1><p>仅像素单位；新数据识别效果需人工核对。自动数值保持原样，人工修正保存在 reviews，修正后导出保存在 exports。</p>'
     page += f'<p>状态：{html.escape(state["status"])}；完成 {len(state["completed"])}/{len(state["sequences"])} 组。</p>'
+    page += '<p><a href="datasets.csv">工况、输出目录与完整来源清单</a></p>'
     if state["completed"]:
         page += '<p><a href="review.html">统一复核页</a> · <a href="parameters_all.csv">自动正式范围总表</a></p>'
     page += '<ul>' + ''.join(cards) + '</ul>'
     if state.get("rejected"):
         page += '<h2>未处理的目录</h2><pre>' + html.escape(json.dumps(state["rejected"], ensure_ascii=False, indent=2)) + '</pre>'
     (folder / "index.html").write_text(page + '</html>', encoding="utf-8")
+    with (folder/'datasets.csv').open('w',encoding='utf-8-sig',newline='') as stream:
+        writer=csv.DictWriter(stream,fieldnames=['condition','output_directory','source_directory','dataset_id','status'])
+        writer.writeheader();writer.writerows(rows)
+
+
+def write_source_info(folder,entry):
+    info=entry.get('source_info') or source_info(entry['directory'])
+    value=dict(info,dataset_id=entry['id'],output_directory=entry_folder(entry))
+    atomic_json(Path(folder)/'source_info.json',value)
+    (Path(folder)/'来源说明.txt').write_text('工况：'+info['display_label']+'\n原始图像目录：'+entry['directory']+
+        '\n采集文件夹：'+info.get('acquisition','')+'\n输出文件夹：'+entry_folder(entry)+'\n数据编号：'+entry['id']+'\n',encoding='utf-8-sig')
 
 
 def worker(entry, folder, settings, cancel):
@@ -103,13 +125,15 @@ def worker(entry, folder, settings, cancel):
     if Path(cancel).exists():
         raise InterruptedError("Task stopped")
     temporary = folder / (".partial_" + entry["id"] + "_" + uuid4().hex[:8])
-    summary = analyze_sequence(entry["directory"], temporary, settings, sequence_name=entry["label"], cancel_path=cancel)
+    summary = analyze_sequence(entry["directory"], temporary, settings, sequence_name=entry["label"], cancel_path=cancel,
+                               alignment_cache=entry.get('alignment_cache_directory'))
     fresh = preflight(entry["directory"], settings)
     if len(fresh["sequences"]) != 1 or fresh["sequences"][0]["input_sha256"] != entry["input_sha256"]:
         raise ValueError("处理期间原图发生变化，请创建新任务。")
     atomic_json(temporary / "complete.json", dict(input_sha256=entry["input_sha256"], algorithm_sha256=digest()[0]))
     # Promotion occurs only after a complete sequence; interrupted work is never resumed as complete.
-    destination = folder / entry["id"]
+    write_source_info(temporary,entry)
+    destination = folder / entry_folder(entry)
     if destination.exists():
         raise ValueError("Completed output already exists; refusing replacement.")
     temporary.rename(destination)
@@ -129,7 +153,7 @@ def run(folder):
     state["status"] = "running"
     state["failed"] = {}
     for entry in state["sequences"]:
-        destination = folder / entry["id"]
+        destination = folder / entry_folder(entry)
         if not destination.exists():
             if entry["id"] in state["completed"]:
                 raise ValueError("已完成组的结果目录缺失。")
@@ -157,7 +181,7 @@ def run(folder):
             print(f'已完成 {len(state["completed"])}/{len(state["sequences"])} 组；{entry["label"]}', flush=True)
     state["status"] = "stopped" if cancel.exists() else "complete_with_errors" if state["failed"] else "complete"
     if state["completed"]:
-        paths = [folder / e["id"] / "measurements.json" for e in state["sequences"] if e["id"] in state["completed"]]
+        paths = [folder / entry_folder(e) / "measurements.json" for e in sorted(state["sequences"],key=dataset_key) if e["id"] in state["completed"]]
         write_combined_review(folder / "review.html", paths)
         rows = []
         for p in paths:

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>液滴 / 液膜工具 0.1.0 · 算法 5.3.1 · px</title>
+<title>液滴 / 液膜工具 __TOOL_VERSION__ · 算法 __ALGORITHM_LABEL__ · px</title>
 <style>
 :root{color-scheme:light;font-family:system-ui,"Microsoft YaHei",sans-serif;color:#223440;background:#f4f6f8;font-size:14px}
 *{box-sizing:border-box}body{margin:0;padding:22px;max-width:1800px;margin:auto}h1{font-size:25px;margin:0 0 6px}p{line-height:1.65}a{color:#08738b}header{display:flex;gap:24px;align-items:center;justify-content:space-between;margin-bottom:16px}.muted{color:#58707d}.bar{background:white;border:1px solid #dbe3e9;border-radius:10px;padding:14px;margin-bottom:14px}.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}button,select,input,textarea{font:inherit}button{border:1px solid #bccdd7;background:#fff;color:#244052;border-radius:5px;padding:7px 12px;cursor:pointer}button:hover{background:#edf6f9}button.primary{background:#086e86;border-color:#086e86;color:#fff}button:disabled{opacity:.45;cursor:default}input[type=range]{flex:1;min-width:150px;accent-color:#08738b}input[type=number]{width:85px;padding:7px;border:1px solid #bccdd7;border-radius:5px}label{display:inline-flex;gap:6px;align-items:center}#status{margin-top:10px;line-height:1.8}.tag{background:#fff0d9;color:#80520b;border:1px solid #efd3a5;border-radius:4px;padding:2px 7px;display:inline-block;margin:2px 4px 2px 0}.tag.good{background:#e1f3e9;color:#286b49;border-color:#b5dcc6}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.panel{background:white;border:1px solid #dbe3e9;border-radius:8px;overflow:hidden}.panel h2{font-size:15px;padding:10px 14px;margin:0;border-bottom:1px solid #e3e9ed}.panel canvas{display:block;width:100%;height:auto;max-height:690px;object-fit:contain;background:white}.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;margin:14px 0}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}.neighbors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));max-width:940px;gap:12px;margin:12px auto}.neighbors canvas{width:100%;height:auto;max-height:250px;object-fit:contain}.neighbors .panel{cursor:pointer}.neighbors h2{font-size:13px}details{margin-top:14px}summary{cursor:pointer;font-weight:600;padding:8px 0}.editbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}textarea{display:block;width:100%;min-height:60px;border:1px solid #c9d5dd;border-radius:5px;padding:8px;margin:10px 0}#editHint{color:#856015;margin:8px 0}pre{overflow:auto;white-space:pre-wrap;font-size:12px}#error{color:#a42828}#frameLabel{font-size:18px;font-weight:650;min-width:100px}footer{font-size:12px;color:#627784;margin:18px 0}.notice{padding:10px;background:#fdf6e9;border-radius:5px}#polygonHint{display:none}.edited{color:#916000;font-weight:600}@media(max-width:800px){body{padding:10px}.grid{grid-template-columns:1fr}.panel canvas{max-height:650px}header{display:block}.neighbors{gap:5px}}
@@ -16,7 +16,7 @@ body{padding:10px 14px;max-width:1920px;font-size:12px}header{gap:14px;margin-bo
 </style>
 </head>
 <body>
-<header><div><h1>液滴 / 液膜工具 0.1.0 · 算法 5.3.1 · px</h1><div id="sequence" class="muted"></div></div><label id="sequencePicker" hidden>切换数据集 <select id="sequenceSelect" aria-label="切换数据集"></select></label><a id="backLink" href="__BACK_LINK__">返回版本列表</a></header>
+<header><div><h1>液滴 / 液膜工具 __TOOL_VERSION__ · 算法 __ALGORITHM_LABEL__ · px</h1><div id="sequence" class="muted"></div></div><label id="sequencePicker" hidden>切换数据集 <select id="sequenceSelect" aria-label="切换数据集"></select></label><a id="backLink" href="__BACK_LINK__">返回版本列表</a></header>
 <section class="bar" id="navigationPanel" aria-label="帧切换与显示操作">
 <div class="controls"><button id="prev">← 上一帧</button><button id="play">播放</button><button id="next">下一帧 →</button><span id="frameLabel"></span><input id="slider" type="range" min="0" value="0"><input id="jump" type="number" aria-label="跳转帧号"><button id="go">跳转</button><button id="impact">撞击候选</button><button id="flagNext">下一异常</button></div>
 <div class="controls" style="margin-top:12px"><label><input id="crop" type="checkbox" checked>放大液体区域</label><label><input id="numbers" type="checkbox" checked>显示像素测量值</label><button id="locateImpact">定位撞击点</button><span class="muted secondary-help">← → 切帧；空格播放。参考图像坐标。</span></div>
@@ -48,13 +48,15 @@ __GEOMETRY__
 'use strict';
 const payload=JSON.parse(document.getElementById('manifest').textContent);
 const datasets=payload.sequences||[payload];
-const requestedSequence=new URLSearchParams(location.search).get('sequence');
-const manifest=datasets.find(item=>item.sequence===requestedSequence)||datasets[0];
-if(datasets.length>1){
+const query=new URLSearchParams(location.search);
+const manifest=datasets.find(item=>item.analysis_signature===query.get('dataset'))||datasets.find(item=>item.sequence===query.get('sequence'))||datasets[0];
+const datasetCatalog=payload.dataset_catalog||datasets;
+if(datasetCatalog.length>1){
   $('sequencePicker').hidden=false;
-  for(const item of datasets){const option=document.createElement('option');option.value=item.sequence;option.textContent=item.sequence;option.selected=item===manifest;$('sequenceSelect').append(option)}
-  $('sequenceSelect').onchange=()=>{const url=new URL(location.href);url.searchParams.set('sequence',$('sequenceSelect').value);location.assign(url.href)};
+  for(const item of datasetCatalog){const option=document.createElement('option');option.value=item.analysis_signature;const label=item.display_label||item.sequence;const duplicate=datasetCatalog.filter(x=>(x.display_label||x.sequence)===label).length>1;option.textContent=label+(duplicate?' / '+(item.source_info?.acquisition||item.sequence)+' ['+item.analysis_signature.slice(0,6)+']':'');option.title=item.source_info?.source_directory||item.source_directory||item.sequence;option.selected=item.analysis_signature===manifest.analysis_signature;$('sequenceSelect').append(option)}
+  $('sequenceSelect').onchange=async()=>{const picker=$('sequenceSelect');picker.disabled=true;try{if(typeof toolContext!=='undefined'&&toolContext){if(!window.toolReview)throw Error('复核记录正在恢复，请稍后切换。');await window.toolReview.flush()}const item=datasetCatalog.find(x=>x.analysis_signature===picker.value);const url=new URL(item.review_url||location.href,location.href);if(!item.review_url){url.searchParams.delete('sequence');url.searchParams.set('dataset',item.analysis_signature)}location.assign(url.href)}catch(error){$('error').textContent=error.message;picker.value=manifest.analysis_signature;picker.disabled=false}};
 }
+const sourceLine=document.createElement('div');sourceLine.className='muted';sourceLine.style.cssText='font-size:11px;overflow-wrap:anywhere';sourceLine.textContent='来源：'+(manifest.source_info?.source_directory||manifest.source_directory||manifest.sequence);$('sequence').after(sourceLine);
 const frames=manifest.frames,wall=manifest.wall.points,wallS=manifest.wall.s_px;
 function $(id){return document.getElementById(id)}
 const labels={thickness_outer_envelope:'厚度量到外轮廓，跨越亮腔或悬出区',contact_evidence_weak:'近壁候选证据不足，未确认为接触',contact_boundary_uncertain:'接触边界不确定',highlight_boundary_reconstructed:'局部亮腔边界补全，需复核',temporal_highlight_repair:'前后帧支持的亮区补全',registration_uncertain:'配准需复核',liquid_at_roi_boundary:'液体接近画面或处理边界',normal_search_truncated:'厚度搜索范围不足',thickness_contact_uncertain:'最大厚度处接触需复核',missing_previous_frame:'存在缺帧',area_jump:'面积突变',contact_endpoint_jump:'接触端点跳变',thickness_jump:'厚度突变'};
@@ -143,7 +145,7 @@ function beginPolygon(append){$('showContour').checked=true;saveLayers();stop();
 $('drawPolygon').onclick=()=>beginPolygon(false);$('addPolygon').onclick=()=>beginPolygon(true);$('finishPolygon').onclick=finishPolygon;
 $('addContact').onclick=()=>{$('showContact').checked=true;$('showEndpoints').checked=true;saveLayers();stop();mode='contact';polygon=[];contactPoints=[];$('editHint').textContent='点击两个端点，吸附到参考壁面后直接替换正式接触段；允许选在算法判为干区的位置。两点之间的壁面总弧长计入正式铺展长度。'};
 $('clearContacts').onclick=()=>{edit().contact_intervals=[];edit().reviewed=false;save();render()};$('cancelEdit').onclick=()=>{mode=null;polygon=[];contactPoints=[];render()};$('resetFrame').onclick=()=>{delete edits[String(frames[index].frame)];save();render()};
-$('reviewed').onchange=()=>{edit().reviewed=$('reviewed').checked;save();render()};$('note').onchange=()=>{edit().note=$('note').value;save()};
+$('reviewed').onchange=()=>{edit().reviewed=$('reviewed').checked;save();render()};$('note').oninput=()=>{edit().note=$('note').value;save()};
 $('setImpact').onclick=()=>{impactOverride=frames[index].frame;save();render()};$('resetImpact').onclick=()=>{impactOverride=null;save();render()};
 function download(name,content,type){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function finalData(){return DropletGeometry.finalManifest(manifest,edits,impactOverride)}

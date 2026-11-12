@@ -53,6 +53,69 @@ def remove_wall_shadow(analyzer,image,mask):
     return mask&~removed,removed
 
 
+def complete_confirmed_wall_boundary(analyzer, mask, result):
+    """Close an enclosed near-wall pocket only after independent contact.
+
+    Shadow removal can cut a dark attached rim because even its low absolute
+    intensity rises outward. Restore only holes already bounded by the current
+    main silhouette and the observed solid, inside the accepted contact span.
+    This is geometry inference: the caller must retain the pre-completion
+    contact evidence and must never use these pixels to seed an impact.
+    """
+    added = np.zeros_like(mask)
+    if not analyzer.contact_confirmed or not result['contact_segments'] or not mask.any():
+        return mask.copy(), added
+    wall = analyzer.wall
+    closed = ndi.binary_fill_holes(mask | wall.solid)
+    candidate = closed & ~mask & analyzer.allowed & (wall.distance <= 7)
+    y, x = np.nonzero(candidate)
+    if not len(x):
+        return mask.copy(), added
+    _, indices = analyzer.wall_tree.query(np.c_[x, y])
+    s = wall.s[indices]
+    inside = np.zeros(len(s), bool)
+    for segment in result['contact_segments']:
+        inside |= (s >= segment['s_start_px']) & (s <= segment['s_end_px'])
+    added[y[inside], x[inside]] = True
+    return mask | added, added
+
+
+def connect_gray_wall_neck(analyzer, image, main, fragment, max_gap=24):
+    """Connect a short thin neck only along a current-image gray path.
+
+    Both components have already reached the wall. A white gap cannot be
+    bridged, and only the small box between the nearest endpoints is searched.
+    Unlike enclosed contact completion, every new neck pixel needs its own
+    darkening evidence above the measured background noise.
+    """
+    added = np.zeros_like(main)
+    y, x = np.nonzero(fragment)
+    if not len(x) or not main.any(): return added
+    distances = ndi.distance_transform_edt(~main)
+    k = int(np.argmin(distances[y,x]))
+    if distances[y[k],x[k]] > max_gap: return added
+    # Query only the small endpoint neighborhood, not a full image index map.
+    radius = int(np.ceil(max_gap))
+    cy,cx=int(y[k]),int(x[k])
+    y0,y1=max(0,cy-radius),min(main.shape[0],cy+radius+1)
+    x0,x1=max(0,cx-radius),min(main.shape[1],cx+radius+1)
+    my,mx=np.nonzero(main[y0:y1,x0:x1])
+    if not len(mx): return added
+    j=int(np.argmin((my+y0-cy)**2+(mx+x0-cx)**2))
+    ey,ex=int(my[j]+y0),int(mx[j]+x0)
+    y0,y1=max(0,min(cy,ey)-3),min(main.shape[0],max(cy,ey)+4)
+    x0,x1=max(0,min(cx,ex)-8),min(main.shape[1],max(cx,ex)+9)
+    wall=analyzer.wall
+    signal=(analyzer.allowed[y0:y1,x0:x1] & (wall.distance[y0:y1,x0:x1]<=3)
+            & wall.valid_rows[y0:y1,None]
+            & ((analyzer.background[y0:y1,x0:x1]-image[y0:y1,x0:x1].astype(float))
+               >= np.maximum(analyzer.settings.dark_support,4*analyzer.noise[y0:y1,x0:x1])))
+    a,b=main[y0:y1,x0:x1],fragment[y0:y1,x0:x1]
+    reachable=ndi.binary_propagation(a,mask=a|b|signal,structure=np.ones((3,3),bool))
+    if (reachable&b).any(): added[y0:y1,x0:x1]=reachable&signal&~(a|b)
+    return added
+
+
 def complete_front_reflection(analyzer,image,mask):
     """Close a small bright opening with the wall included in the closure.
 

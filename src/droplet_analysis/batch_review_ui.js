@@ -22,10 +22,10 @@ $('import').onchange=async()=>{
     const file=$('import').files[0];if(!file)return;
     const payload=JSON.parse(await file.text()),items=payload.sequences||[payload],pending=[],seen=new Set();
     for(const value of items){
-      const item=datasets.find(v=>v.sequence===value.sequence);
-      if(!item||seen.has(value.sequence)||value.coordinate_system!=='aligned_reference_px'||value.analysis_signature!==item.analysis_signature||!value.frames)
+      const item=datasets.find(v=>v.analysis_signature===value.analysis_signature&&v.sequence===value.sequence);
+      if(!item||seen.has(value.analysis_signature)||value.coordinate_system!=='aligned_reference_px'||!value.frames)
         throw Error('复核文件与数据集、坐标系或分析签名不匹配，或数据集重复。');
-      seen.add(value.sequence);
+      seen.add(value.analysis_signature);
       const stored=item===manifest?{frames:edits,impact_frame:impactOverride}:JSON.parse(localStorage.getItem('droplet-review-v5:'+item.sequence+':'+item.analysis_signature)||'{}');
       const merged={...(stored.frames||{})};
       for(const [key,editValue] of Object.entries(value.frames))merged[key]={...(merged[key]||{}),...editValue};

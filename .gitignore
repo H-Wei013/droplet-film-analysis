@@ -40,3 +40,5 @@ state.json
 all.review*.json
 *.review.json
 .tools/
+diagnostics/
+人工修正备份/

@@ -9,7 +9,7 @@ import csv,hashlib,json,os,time
 import cv2
 import numpy as np
 import yaml
-from droplet_analysis.core import Settings,read_gray,save_image,load_sequence,discover_sequences
+from droplet_analysis.core import Settings,read_gray,save_image,load_sequence,discover_sequences,contours_of
 from droplet_analysis.v5 import Analyzer,detect_impact
 from droplet_analysis.temporal import select_anchors,repair_highlights
 from droplet_analysis.render import overlay,sheet
@@ -17,9 +17,10 @@ from watercar_tool.review import write_review,write_combined_review
 from watercar_tool.io import pixel_csv,series_plots
 from watercar_tool.provenance import digest
 from droplet_analysis.impact import attach_impact_point
-from droplet_analysis.optical import recover_thin_tail,remove_wall_shadow,limit_valid_view,reject_transient_tail
+from droplet_analysis.optical import recover_thin_tail,remove_wall_shadow,limit_valid_view,reject_transient_tail,complete_confirmed_wall_boundary
+from . import ALGORITHM_VERSION, TOOL_VERSION
 
-VERSION='5.3.1-confirmed-contact-continuation-and-observed-front'
+VERSION=ALGORITHM_VERSION
 ROOT=Path(__file__).resolve().parent
 
 
@@ -35,7 +36,8 @@ def analyze_sequence(directory,output,settings_dict,alignment_cache=None,sequenc
     analyzer=Analyzer([read_gray(p) for p in files[:settings.reference_frames]],settings)
     cache_frames=None;cache_provenance=None
     if alignment_cache is not None:
-        cache_folder=Path(alignment_cache)/name
+        cache_folder=Path(alignment_cache)
+        if not (cache_folder/'measurements.json').exists():cache_folder=cache_folder/name
         cache_manifest_path=cache_folder/'measurements.json'
         cached=json.loads(cache_manifest_path.read_text(encoding='utf-8'))
         if Path(cached['source_directory']).resolve()!=directory.resolve() or [r['frame'] for r in cached['frames']]!=numbers:raise ValueError('Alignment cache source mismatch')
@@ -49,7 +51,7 @@ def analyze_sequence(directory,output,settings_dict,alignment_cache=None,sequenc
             alignment_validation_frames=[numbers[j] for j in sorted({0,len(numbers)//2,len(numbers)-1})],
             note='Only lossless aligned images reused. Segmentation, main-film selection, temporal reconstruction, measurement and plots recomputed. Fresh alignment checks must match pixel-for-pixel.')
     source_digest,_=digest();signature=hashlib.sha256((source_digest+str(directory)+json.dumps(asdict(settings),sort_keys=True)).encode()).hexdigest()[:20]
-    for sub in ['frames','initial_masks','masks','overlays']:(output/sub).mkdir()
+    for sub in ['frames','initial_masks','masks','observed_masks','contact_completion_masks','overlays']:(output/sub).mkdir()
     save_image(output/'background.png',analyzer.background.astype(np.uint8))
     save_image(output/'wall_reference.png',overlay(analyzer.background.astype(np.uint8),analyzer.wall,dict(contours=[],contact_segments=[],maximum_visible_thickness=None)))
     anchors=[];extras=[];sources=[]
@@ -74,6 +76,7 @@ def analyze_sequence(directory,output,settings_dict,alignment_cache=None,sequenc
         anchors.append(dict(frame=number,area_px2=int(main.sum()),repaired_boundary_area_px2=int((repaired&main).sum())))
         extras.append(dict(registration_translation_px=translation,registration_flags=flags,satellite_contours=satellites,
                            main_film_tracking=tracking,associated_fragment_count=analyzer.last_fragment_count,
+                           gray_neck_bridge_area_px2=analyzer.last_gray_neck_bridge_area,
                            spatial_repair_area_px2=int((repaired&main).sum()),
                            filled_interior_area_px2=int((filled&main).sum()),
                            wall_shadow_removed_area_px2=analyzer.last_shadow_area,front_specular_repair_area_px2=analyzer.last_front_repair_area,
@@ -100,9 +103,38 @@ def analyze_sequence(directory,output,settings_dict,alignment_cache=None,sequenc
             main,tail_removed=reject_transient_tail(analyzer,aligned,main,[base(i-1)[1],base(i+1)[1]])
         else:tail_repair=np.zeros_like(main);tail_removed=np.zeros_like(main)
         main,_,tracking=analyzer.main_component(main,number,aligned)
+        temporal_neck_area=analyzer.last_gray_neck_bridge_area
         main,shadow=remove_wall_shadow(analyzer,aligned,main)
         result,profile,confirmed,potential=analyzer.measure_main(main,aligned,number,repair)
+        # Establish contact on observed pixels first. Completed geometry never
+        # enters contact history, impact seeds, or temporal anchor selection.
+        save_image(output/'observed_masks'/f'{number:06d}.png',main.astype(np.uint8)*255)
+        main,contact_completion=complete_confirmed_wall_boundary(analyzer,main,result)
+        completion_area=int(contact_completion.sum())
+        save_image(output/'contact_completion_masks'/f'{number:06d}.png',contact_completion.astype(np.uint8)*255)
+        result.update(contact_completion_area_px2=completion_area,
+                      observed_mask=f'observed_masks/{number:06d}.png',
+                      contact_completion_mask=f'contact_completion_masks/{number:06d}.png')
+        if completion_area:
+            yy,xx=np.nonzero(main)
+            result.update(contours=contours_of(main),area_px2=int(main.sum()),
+                          centroid=[float(xx.mean()),float(yy.mean())],
+                          bbox=[int(xx.min()),int(yy.min()),int(xx.max()+1),int(yy.max()+1)],
+                          minimum_wall_gap_px=float(analyzer.wall.distance[main].min()))
+            profile,maximum,truncated=analyzer.outer_thickness(main,confirmed)
+            if maximum:
+                k=int(np.argmin(abs(analyzer.wall.s-maximum['s_px'])))
+                uses_completion=bool((analyzer.wall.sample(contact_completion,nearest=True)[k]>.5).any())
+                maximum['uses_inferred_contact_completion']=uses_completion
+                if uses_completion:result['flags'].append('thickness_uses_inferred_contact_completion')
+                old=result.get('maximum_visible_thickness')
+                if old and old.get('spans_visible_gap'):maximum['spans_visible_gap']=True
+            result['maximum_visible_thickness']=maximum
+            if truncated and 'normal_search_truncated' not in result['flags']:result['flags'].append('normal_search_truncated')
+            result['flags'].append('confirmed_contact_boundary_completed')
         extra=extras[i];result.update({k:v for k,v in extra.items() if k!='registration_flags'})
+        result['gray_neck_bridge_area_px2']+=temporal_neck_area
+        if result['gray_neck_bridge_area_px2']:result['flags'].append('current_gray_wall_neck_connected')
         result['flags']+=extra['registration_flags']
         if extra['spatial_repair_area_px2']>20:result['flags'].append('highlight_boundary_reconstructed')
         if extra['associated_fragment_count']>1:result['flags'].append('saturated_main_film_fragments_associated')
@@ -126,14 +158,15 @@ def analyze_sequence(directory,output,settings_dict,alignment_cache=None,sequenc
     signature=hashlib.sha256((signature+json.dumps(sources,sort_keys=True)).encode()).hexdigest()[:20]
     manifest=dict(schema_version=5,algorithm_version=VERSION,algorithm_sha256=source_digest,sequence=name,analysis_signature=signature,
         source_directory=str(directory),frame_numbering='Original numeric filename suffix; never renumbered.',
-        coordinate_system='reference-aligned image pixels; origin top-left, x right, y down',units='px',tool_version='0.1.0',
+        coordinate_system='reference-aligned image pixels; origin top-left, x right, y down',units='px',tool_version=TOOL_VERSION,
         physical_calibration=dict(status='not_configured',mm_per_px=None),
-        image_size=[analyzer.background.shape[1],analyzer.background.shape[0]],settings=asdict(settings),camera_metadata=metadata,alignment_cache=cache_provenance,
+        image_size=[analyzer.background.shape[1],analyzer.background.shape[0]],settings=asdict(settings),effective_roi=list(analyzer.roi),camera_metadata=metadata,alignment_cache=cache_provenance,
         wall=dict(source=wall.source,points=wall.points.tolist(),normals=wall.normals.tolist(),s_px=wall.s.tolist(),uncertainty_px=settings.wall_uncertainty_px),
         impact=impact,analysis_window=analysis_window,definitions=dict(contact_length_px='Wall arc between outermost main-film contact endpoints, including the span of internal uncertain gaps. Not sum of evidence intervals.',
             contact_evidence_length_px='Sum of separately image-supported main-film contact intervals.',
             maximum_visible_thickness='Maximum solid-safe wall-normal distance to the complete main-liquid outer silhouette. Bright internal highlights are included; independent drops excluded.',
             contours='Complete main film only, including front body and attached elongated tail. Other detected drops are in satellite_contours.',
+            contact_completion='Enclosed near-wall geometry completed only after independently confirmed contact. Observed masks and completion masks are saved separately; inferred pixels never seed contact or impact.',
             uncertainty='Image-evidence flags, not calibrated statistical confidence intervals.'),frames=results)
     attach_impact_point(manifest)
     dump(output/'measurements.json',manifest);dump(output/'source_frames.json',sources)

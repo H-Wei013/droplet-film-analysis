@@ -4,12 +4,15 @@ seriesHost.innerHTML='<div class="series-heading"><h2>厚度与接触长度序�
 document.getElementById('navigationPanel').before(seriesHost);
 const impactInfo=document.getElementById('impactPointInfo');
 labels.unsupported_front_extension_removed='仅由壁面闭合的前方亮空气区域已排除，需复核';labels.transient_weak_tail_removed='前后帧均无支持的弱尾部突出已排除，需复核';
+labels.confirmed_contact_boundary_completed='接触确认后补全封闭近壁轮廓；补全不作为接触证据';
+labels.thickness_uses_inferred_contact_completion='厚度线经过推断补全的近壁区域，需复核';
+labels.current_gray_wall_neck_connected='已沿当前灰度连续证据连接细颈';
 $('seriesAll').parentElement.lastChild.textContent='显示撞击前候选值';
 const validWindowInfo=document.createElement('span');validWindowInfo.id='validWindowInfo';document.getElementById('locateImpact').after(validWindowInfo);
 function fitWorkspace(){if(innerWidth<=1100)return;const top=document.getElementById('reviewWorkspace').getBoundingClientRect().top+scrollY,available=Math.max(270,innerHeight-top-12);document.documentElement.style.setProperty('--manual-stage',available+'px');document.documentElement.style.setProperty('--image-stage',Math.max(240,available-24)+'px')}
 const fitObserver=new ResizeObserver(fitWorkspace);fitObserver.observe(seriesHost);fitObserver.observe(document.getElementById('navigationPanel'));window.addEventListener('resize',fitWorkspace);fitWorkspace();
 const scaleMM=1;
-labels.contact_span_contains_uncertain_gaps='两端跨度内含证据不足的部分';labels.main_film_reacquired='主液膜重新定位，需复核';labels.main_film_missing='主液膜缺测';labels.saturated_main_film_fragments_associated='强反光碎片已按贴壁证据关联，需复核';labels.wall_shadow_fringe_removed='近壁亮空气过渡已排除';labels.front_specular_completion='前端反光轮廓补全，需复核';labels.temporal_thin_tail_recovered='当前灰度及双侧邻帧支持的薄尾恢复';labels.outside_valid_wall_view='已到壁面有效边界，正式测量序列已终止';
+labels.contact_span_contains_uncertain_gaps='两端跨度内含证据不足的部分';labels.main_film_reacquired='主液膜重新定位，需复核';labels.main_film_missing='主液膜缺测';labels.saturated_main_film_fragments_associated='强反光碎片已按贴壁证据关联，需复核';labels.wall_shadow_fringe_removed='近壁阴影候选已排除';labels.front_specular_completion='前端反光轮廓补全，需复核';labels.temporal_thin_tail_recovered='当前灰度及双侧邻帧支持的薄尾恢复';labels.outside_valid_wall_view='已到壁面有效边界，正式测量序列已终止';
 function drawSeries(){
   const impact=impactOverride??manifest.impact.first_contact_frame;
   const all=frames.map((f,i)=>({r:effective(i),i}));
@@ -44,5 +47,5 @@ for(const id of ['thicknessSeries','contactSeries'])$(id).onclick=e=>{const c=$(
 $('seriesAll').onchange=drawSeries;
 for(const [button,id,name] of [['downloadThickness','thicknessSeries','thickness_vs_frame'],['downloadContact','contactSeries','contact_length_vs_frame']])$(button).onclick=()=>{const a=document.createElement('a');a.download=manifest.sequence+'.'+name+'.png';a.href=$(id).toDataURL('image/png');a.click()};
 const renderWithoutSeries=render;render=function(){drawSeries();return renderWithoutSeries()};
-$('sequence').textContent=manifest.sequence+' · '+frames.length+' 帧 · 像素单位 px';
+$('sequence').textContent=(manifest.display_label||manifest.sequence)+' · '+frames.length+' 帧 · 像素单位 px';
 drawSeries();

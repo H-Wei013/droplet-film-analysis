@@ -10,11 +10,12 @@ import threading
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, parse_qs
 from uuid import uuid4
 
 from .io import atomic_json, load_json, pixel_csv, series_plots
-from .review import render_review, write_review
+from .review import render_review, write_review, ASSET_FIELDS
+from .datasets import display_manifest, dataset_key
 
 
 class Conflict(ValueError):
@@ -63,8 +64,7 @@ class Project:
         paths = sorted(self.folder.glob("*/measurements.json"))
         if (self.folder / "measurements.json").exists():
             paths = [self.folder / "measurements.json"]
-        for p in paths:
-            m = load_json(p)
+        for p, m in sorted(((p, load_json(p)) for p in paths), key=lambda pair: dataset_key(pair[1])):
             if m.get("schema_version") != 5:
                 raise ValueError("仅支持 V5 测量结果。")
             key = m["analysis_signature"]
@@ -75,13 +75,14 @@ class Project:
             raise ValueError("此目录还没有完整的测量结果。")
         self.assets = {}
         for group in self.groups.values():
-            m = copy.deepcopy(group["manifest"])
+            m = display_manifest(copy.deepcopy(group["manifest"]))
             m["units"] = "px"
             m["physical_calibration"] = dict(status="not_configured", mm_per_px=None)
             if m.get("impact_point"):
                 m["impact_point"]["s_mm"] = None
             for f in m["frames"]:
-                for key in ["image", "mask"]:
+                for key in ASSET_FIELDS:
+                    if key not in f: continue
                     asset = (group["path"].parent / f[key]).resolve()
                     if asset.suffix.lower() not in [".png", ".bmp"]:
                         raise ValueError("结果图像格式不支持。")
@@ -120,20 +121,22 @@ class Project:
             atomic_json(self.state_path, state)
             return state
 
-    def render(self, prefix, selected=None):
-        groups = list(self.groups.values())
-        if selected is not None:
-            if selected not in self.groups:
-                raise ValueError("结果不存在。")
-            groups = [self.groups[selected]]
-        manifests = []
-        for group in groups:
-            m = copy.deepcopy(group["view"])
-            for f in m["frames"]:
-                for k in ["image", "mask"]:
+    def manifest_view(self, prefix, selected):
+        if selected not in self.groups:
+            raise ValueError("结果不存在。")
+        m = copy.deepcopy(self.groups[selected]["view"])
+        for f in m["frames"]:
+            for k in ASSET_FIELDS:
+                if k in f:
                     f[k] = prefix + "/assets/" + f[k].removeprefix("@asset/")
-            manifests.append(m)
-        payload = {"sequences": manifests} if selected is None else manifests[0]
+        return m
+
+    def render(self, prefix, selected=None):
+        selected = selected or next(iter(self.groups))
+        catalog = [dict(analysis_signature=key, sequence=g['view']['sequence'],
+                        display_label=g['view']['display_label'], source_info=g['view']['source_info'],
+                        review_url=prefix+'/'+key+'/review.html') for key,g in self.groups.items()]
+        payload = dict(sequences=[self.manifest_view(prefix, selected)], dataset_catalog=catalog)
         return render_review(payload, dict(api=prefix, sequence_signatures=list(self.groups)), back_link=prefix+"/index.html")
 
     def export(self, signature, revision, value):
@@ -171,7 +174,8 @@ class Project:
             if value.get("impact_point"):
                 value["impact_point"]["s_mm"] = None
             for f, original in zip(value["frames"], base["frames"]):
-                for key in ["image", "mask"]:
+                for key in ASSET_FIELDS:
+                    if key not in original: continue
                     actual = (self.groups[signature]["path"].parent / original[key]).resolve()
                     f[key] = Path(os.path.relpath(actual, destination)).as_posix()
             value["review_revision"] = revision
@@ -210,17 +214,23 @@ class ReviewService:
                     project, parts, prefix = self.route()
                     if parts == ["api", "reviews"]:
                         self.respond(project.read_state())
+                    elif len(parts) == 3 and parts[:2] == ['api', 'manifests']:
+                        self.respond(project.manifest_view(prefix, parts[2]))
                     elif parts[0] == "assets" and len(parts) == 2 and parts[1] in project.assets:
                         p = project.assets[parts[1]]
                         self.respond(p.read_bytes(), mime=mimetypes.guess_type(p.name)[0] or "image/png")
                     elif parts == ["review.html"]:
-                        self.respond(project.render(prefix).encode(), mime="text/html; charset=utf-8")
+                        query = parse_qs(urlsplit(self.path).query)
+                        selected = query.get('dataset', [None])[0]
+                        if selected is None and 'sequence' in query:
+                            selected = next((k for k,g in project.groups.items() if g['manifest']['sequence'] == query['sequence'][0]), None)
+                        self.respond(project.render(prefix, selected).encode(), mime="text/html; charset=utf-8")
                     elif len(parts) == 2 and parts[1] == "review.html":
                         self.respond(project.render(prefix, parts[0]).encode(), mime="text/html; charset=utf-8")
                     elif parts == ["index.html"]:
                         import html
-                        links = ''.join('<li><a href="'+prefix+'/'+key+'/review.html">'+html.escape(g["manifest"]["sequence"])+"</a></li>" for key,g in project.groups.items())
-                        doc = '<!doctype html><meta charset="utf-8"><title>液膜工具</title><h1>液膜工具 · 算法 5.3.1 · px</h1><p>复核自动保存到结果目录；需要新数据测试确认适用性。</p><a href="'+prefix+'/review.html">统一复核页</a><ul>'+links+'</ul>'
+                        links = ''.join('<li><a href="'+prefix+'/'+key+'/review.html">'+html.escape(g['view']['display_label'])+'</a><br><small>'+html.escape(g['view']['source_info']['source_directory'])+"</small></li>" for key,g in project.groups.items())
+                        doc = '<!doctype html><meta charset="utf-8"><title>液膜工具</title><h1>液膜工具 · 历史结果复核 · px</h1><p>复核自动保存到结果目录；需要新数据测试确认适用性。</p><a href="'+prefix+'/review.html">统一复核页</a><ul>'+links+'</ul>'
                         self.respond(doc.encode(), mime="text/html; charset=utf-8")
                     else:
                         self.respond({"error": "文件不存在"}, 404)

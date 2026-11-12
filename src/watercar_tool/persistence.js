@@ -44,6 +44,7 @@
   await flush();const file=document.getElementById('import').files[0];if(!file)return;const value=JSON.parse(await file.text());
   const items=value.sequences||[value],changes={},seen=new Set();
   for(const item of items){
+   if(!allBySignature.has(item.analysis_signature)&&toolContext.sequence_signatures.includes(item.analysis_signature))allBySignature.set(item.analysis_signature,await call('manifests/'+encodeURIComponent(item.analysis_signature)));
    const m=allBySignature.get(item.analysis_signature);
    if(!m||m.sequence!==item.sequence||item.coordinate_system!=='aligned_reference_px'||seen.has(item.analysis_signature))throw Error('复核文件与当前结果不一致或包含重复组。');
    seen.add(item.analysis_signature);

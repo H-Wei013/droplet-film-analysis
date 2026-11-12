@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "droplet-film-analysis"
-version = "0.1.0"
-description = "Local BMP droplet/film analysis and manual review, using the 5.3.1 numerical engine."
+version = "0.2.0"
+description = "Local BMP droplet/film analysis and manual review, using the 5.3.2 numerical engine."
 requires-python = ">=3.11"
 dependencies = ["numpy", "scipy", "opencv-python", "matplotlib", "PyYAML"]
 

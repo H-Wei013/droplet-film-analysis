@@ -6,7 +6,7 @@ from scipy import ndimage as ndi
 from scipy.spatial import cKDTree
 from .core import Analyzer as SpatialAnalyzer, contours_of, intervals, keep_runs
 from .silhouette import complete_bright_cavities
-from .optical import remove_wall_shadow,complete_front_reflection,wall_air_gap,trim_front_extension
+from .optical import remove_wall_shadow,complete_front_reflection,wall_air_gap,trim_front_extension,connect_gray_wall_neck
 
 
 def segment(wall, a, b):
@@ -38,6 +38,7 @@ class Analyzer(SpatialAnalyzer):
         self.air_gap_noise=cv2.remap(self.noise.astype(np.float32),wall.map_x[:,selected],wall.map_y[:,selected],cv2.INTER_LINEAR).max(axis=1)
         self.last_shadow_area=0;self.last_front_repair_area=0
         self.last_front_trim_area=0
+        self.last_gray_neck_bridge_area=0
         self.contact_history_number=None;self.contact_seed_streak=0;self.contact_confirmed=False;self.contact_history_span=None
 
     def segment(self,aligned):
@@ -48,6 +49,7 @@ class Analyzer(SpatialAnalyzer):
 
     def main_component(self, liquid, number, image=None):
         self.last_front_trim_area=0
+        self.last_gray_neck_bridge_area=0
         count, labels, stats, centers = cv2.connectedComponentsWithStats(liquid.astype(np.uint8), 8)
         if count <= 1:
             self.previous_main = None
@@ -67,6 +69,7 @@ class Analyzer(SpatialAnalyzer):
             chosen = max(candidates,key=lambda i:body_count[i])
             status = 'initialized'
         selected={chosen}
+        neck_bridges=np.zeros_like(liquid)
         near_wall=np.unique(labels[liquid & (self.wall.distance<=self.settings.wall_uncertainty_px+.5)])
         # Saturation can cut one wall-attached liquid into multiple dark pieces.
         # Associate only nearby pieces that themselves reach the wall; an
@@ -74,12 +77,22 @@ class Analyzer(SpatialAnalyzer):
         if chosen in near_wall:
             changed=True
             while changed:
-                changed=False;main=np.isin(labels,list(selected));distance=ndi.distance_transform_edt(~main)
+                changed=False;main=np.isin(labels,list(selected))|neck_bridges;distance=ndi.distance_transform_edt(~main)
                 for label in candidates:
                     if label in selected or label not in near_wall:continue
-                    if distance[labels==label].min()<=15:
+                    gap=distance[labels==label].min()
+                    if gap<=15:
                         selected.add(label);changed=True
-        main = np.isin(labels,list(selected))
+                    elif image is not None and gap<=24:
+                        y,x=self.optical_band_pixels
+                        ids=self.optical_band_indices[main[y,x]&(self.wall.distance[y,x]<=2.5)]
+                        width=float(self.wall.distance[main].max())
+                        if len(ids)<2 or np.ptp(self.wall.s[ids])<1.25*width:continue
+                        bridge=connect_gray_wall_neck(self,image,main,labels==label)
+                        if bridge.any():
+                            selected.add(label);neck_bridges|=bridge;changed=True
+        main = np.isin(labels,list(selected))|neck_bridges
+        self.last_gray_neck_bridge_area=int(neck_bridges.sum())
         # A resolved gray lobe can be separated by a sub-threshold optical neck.
         # Require current-image gray support across a <=3 px connection; nearby
         # airborne drops separated by a white gap stay independent.

@@ -35,6 +35,7 @@ class Settings:
     register: bool = True
     roi: object = None
     wall_points: object = None
+    wall_search_roi: object = None
     review_frames: object = None
 
     @classmethod
@@ -126,12 +127,24 @@ class Wall:
             spline = UnivariateSpline(yy, xx, s=0)
             self.source = 'manual_reference'
         else:
-            left, right = int(width * .32), int(width * .98)
-            yy = np.arange(settings.edge_margin_px, height - settings.edge_margin_px)
+            # The wall may cross the left half of a new image as it approaches
+            # the bottom. A fixed fractional x window silently truncated it.
+            bounds = settings.wall_search_roi or [settings.edge_margin_px, settings.edge_margin_px,
+                                                  width-settings.edge_margin_px, height-settings.edge_margin_px]
+            if (len(bounds) != 4 or any(not isinstance(v, (int, np.integer)) for v in bounds)
+                    or not (0 <= bounds[0] < bounds[2] <= width and 0 <= bounds[1] < bounds[3] <= height)):
+                raise ValueError('wall_search_roi must be integer [left, top, right, bottom] within the image')
+            left, top, right, bottom = bounds
+            if right-left <= 18:
+                raise ValueError('Wall search region is too narrow')
+            yy = np.arange(top, bottom)
             rows = dx[yy, left:right]
             xx = np.argmin(rows, axis=1) + left
             strength = -dx[yy, xx]
             valid = (strength > 2.0) & (xx > left + 8) & (xx < right - 8)
+            # Do not join a different edge across a large horizontal jump.
+            jumps = np.flatnonzero(np.abs(np.diff(xx)) > max(12, width*.04))
+            valid[jumps+1] = False
             runs = intervals(valid)
             if not runs:
                 raise ValueError('No clear right-hand wall edge; supply wall_points')
@@ -145,7 +158,7 @@ class Wall:
             # quantization tightly produced large, spurious normal rotations.
             stable = ndi.gaussian_filter1d(med.astype(float), 4, mode='nearest')
             spline = UnivariateSpline(yy[good], stable[good], s=np.count_nonzero(good) * .18)
-            self.source = 'automatic_regularized_gradient_reference_v5'
+            self.source = 'automatic_full_width_continuous_gradient_reference_v5_3_2'
         self.y_min, self.y_max = float(yy[0]), float(yy[-1])
         y_dense = np.arange(self.y_min, self.y_max + .25, .25)
         x_dense = spline(y_dense)
@@ -161,11 +174,19 @@ class Wall:
         self.slope_by_y = spline.derivative()(np.clip(np.arange(height), self.y_min, self.y_max))
         grid_x = np.arange(width)[None, :]
         self.distance = ((self.x_by_y[:, None] - grid_x) / np.sqrt(1 + self.slope_by_y[:, None] ** 2)).astype(np.float32)
-        self.solid = grid_x >= self.x_by_y[:, None]
+        row_y = np.arange(height)
+        self.valid_rows = (row_y >= self.y_min) & (row_y <= self.y_max)
+        self.solid = (grid_x >= self.x_by_y[:, None]) & self.valid_rows[:, None]
+        # Outside the observed wall there is no evidence for a vertical solid
+        # boundary. Keep liquid inspectable, using endpoint distance only; do
+        # not extrapolate a measured contact curve into those rows.
+        for outside, endpoint in [(row_y < self.y_min, self.points[0]), (row_y > self.y_max, self.points[-1])]:
+            self.distance[outside] = np.hypot(grid_x-endpoint[0], row_y[outside, None]-endpoint[1])
         self.offsets = np.arange(0, settings.max_normal_distance_px + settings.normal_step_px / 2, settings.normal_step_px).astype(np.float32)
         sample = self.points[:, None, :] + self.normals[:, None, :] * self.offsets[None, :, None]
         self.map_x, self.map_y = sample[..., 0].copy(), sample[..., 1].copy()
         self.sample_valid = ((self.map_x >= 0) & (self.map_x < width - 1) & (self.map_y >= 0) & (self.map_y < height - 1))
+        self.sample_valid &= (self.map_y >= self.y_min) & (self.map_y <= self.y_max)
         self.settings = settings
 
     def sample(self, image, nearest=False):
@@ -205,7 +226,7 @@ class Analyzer:
         self.wall = Wall(self.background, settings)
         self.noise = np.median(np.abs(stack - self.background), axis=0) * 1.4826
         h, w = self.background.shape
-        self.roi = settings.roi or [int(w * .25), 3, int(w * .99), h - settings.edge_margin_px]
+        self.roi = settings.roi or [0, 0, w, h - settings.edge_margin_px]
         x0, y0, x1, y1 = map(int, self.roi)
         if not (0 <= x0 < x1 <= w and 0 <= y0 < y1 <= h):
             raise ValueError('roi must be [left, top, right, bottom] within the image')
